@@ -9,6 +9,65 @@
 import Foundation
 import UIKit
 
+class CustomLayoutManager: NSLayoutManager {
+
+    override func drawGlyphs(forGlyphRange glyphsToShow: NSRange, at origin: CGPoint) {
+        let range = self.characterRange(forGlyphRange: glyphsToShow, actualGlyphRange: nil)
+        guard let textStorage = textStorage else {
+            return
+        }
+        textStorage
+            .enumerateAttribute(NSAttributedString.Key(rawValue: "RoundedBackgroundColorAttribute"),
+                                in: range,
+                                options: .longestEffectiveRangeNotRequired)
+            { (value, range, objCBoolStop) in
+                guard let value = value else {
+                    super.drawGlyphs(forGlyphRange: range, at: origin)
+                    return
+                }
+                guard let color = (value as? UIColor) else { return }
+                let glRange = glyphRange(forCharacterRange: range, actualCharacterRange: nil);
+                //UInt here is because otherwise playground does not want to execute, although compiler
+                //is actually letting me know that this is wrong. However, this makes the playground work
+                //if it doesn't work for you, try removing UInt wrapping here.
+                guard let tContainer = textContainer(forGlyphAt: glRange.location,
+                                                    effectiveRange: nil) else { return }
+                //draw background rectangle
+                guard let context = UIGraphicsGetCurrentContext() else { return }
+                guard let font = currentFontFor(range: range) else {
+                    return
+                }
+                context.saveGState()
+                context.translateBy(x: origin.x, y: origin.y)
+                color.setFill()
+                var rect = boundingRect(forGlyphRange: glRange, in: tContainer)
+              //  rect.origin.x = rect.origin.x - 5
+              //  if(rect.origin.y == 0) {
+            //        rect.origin.y = rect.origin.y - 1
+           //     } else {
+                          rect.origin.y = rect.origin.y - 1
+          //      }
+              //  rect.size.width = rect.size.width + 10
+                rect.size.height = font.lineHeight + 2
+
+                let path = UIBezierPath(roundedRect: rect, cornerRadius: 4)
+                path.fill()
+                context.restoreGState()
+                super.drawGlyphs(forGlyphRange: range, at: origin)
+                
+        }
+        
+    }
+
+    func currentFontFor(range: NSRange) -> UIFont? {
+        guard let textStorage = textStorage else {
+            return nil
+        }
+        guard let font = textStorage.attributes(at: range.location, effectiveRange: nil)[NSAttributedString.Key.font] as? UIFont else { return nil }
+        return font
+    }
+}
+
 public protocol ActiveLabelDelegate: class {
     func didSelect(_ text: String, type: ActiveType)
 }
@@ -244,14 +303,14 @@ typealias ElementTuple = (range: NSRange, element: ActiveElement, type: ActiveTy
     internal var hashtagTapHandler: ((String) -> ())?
     internal var urlTapHandler: ((URL) -> ())?
     internal var customTapHandlers: [ActiveType : ((String) -> ())] = [:]
-    
+
     fileprivate var mentionFilterPredicate: ((String) -> Bool)?
     fileprivate var hashtagFilterPredicate: ((String) -> Bool)?
     
     fileprivate var selectedElement: ElementTuple?
     fileprivate var heightCorrection: CGFloat = 0
     internal lazy var textStorage = NSTextStorage()
-    fileprivate lazy var layoutManager = NSLayoutManager()
+    fileprivate lazy var layoutManager = CustomLayoutManager()
     fileprivate lazy var textContainer = NSTextContainer()
     lazy var activeElements = [ActiveType: [ElementTuple]]()
     
@@ -324,7 +383,7 @@ typealias ElementTuple = (range: NSRange, element: ActiveElement, type: ActiveTy
             case .hashtag: attributes[NSAttributedString.Key.foregroundColor] = hashtagColor
             case .url: attributes[NSAttributedString.Key.foregroundColor] = URLColor
             case .custom: attributes[NSAttributedString.Key.foregroundColor] = customColor[type] ?? defaultCustomColor
-            attributes[NSAttributedString.Key.backgroundColor] = customBG[type] ?? .clear
+            attributes[NSAttributedString.Key(rawValue: "RoundedBackgroundColorAttribute")] = customBG[type] ?? .clear
             }
             
             if let highlightFont = hightlightFont {
